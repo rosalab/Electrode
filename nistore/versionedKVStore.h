@@ -11,6 +11,7 @@
 #define _NI_VERSIONED_KV_STORE_H_
 
 #include <unistd.h>
+#include <cstdint>
 #include <stdlib.h>
 #include <unordered_map>
 #include <vector>

@@ -10,6 +10,7 @@
 #ifndef _LOCK_SERVER_H_
 #define _LOCK_SERVER_H_
 
+#include <cstdint>
 #include <unistd.h>
 #include <stdlib.h>
 #include <unordered_map>

@@ -126,7 +126,6 @@ $(KERN_OBJECTS): %.o: %.c
 	    -Wno-compare-distinct-pointer-types \
 	    -Wno-gnu-variable-sized-type-not-at-end \
 	    -Wno-tautological-compare \
-	    -Wno-unknown-warning-option \
 	    -Wno-address-of-packed-member \
 	    -O3 -g -emit-llvm -c $< -o ${@:.o=.ll}
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
