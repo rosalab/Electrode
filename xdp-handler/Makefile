@@ -76,10 +76,6 @@ clean:
 	rm -f $(KERN_OBJECTS)
 	rm -f $(USER_OBJECTS)
 	rm -f $(OBJECT_LOADBPF)
-	sudo rm -f /sys/fs/bpf/paxos_prepare_buffer
-	sudo rm -f /sys/fs/bpf/paxos_request_buffer
-	sudo rm -f /sys/fs/bpf/paxos_ctr_state
-	sudo rm -f /sys/fs/bpf/FastBroadCast
 
 dependencies: verify_target_bpf
 
@@ -125,7 +121,7 @@ $(LIBBPF): $(wildcard $(LIBBPF_PATH)/*.[ch] $(LIBBPF_PATH)/Makefile)
 $(KERN_OBJECTS): %.o: %.c
 	$(CLANG) -S $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H -D__BPF_TRACING__  -DKBUILD_MODNAME="\"wzz\"" \
-	    -D__TARGET_ARCH_$(ARCH) \
+	    -D__TARGET_ARCH_$(ARCH) -fno-stack-protector \
 	    -Wno-unused-value -Wno-pointer-sign \
 	    -Wno-compare-distinct-pointer-types \
 	    -Wno-gnu-variable-sized-type-not-at-end \

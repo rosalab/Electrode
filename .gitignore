@@ -1,0 +1,5 @@
+.cache
+compile_commands.json
+fast_kern.ll
+*.o
+fast
