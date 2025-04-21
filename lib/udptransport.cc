@@ -59,6 +59,7 @@ const uint64_t FRAG_MAGIC = 0x20101010;
 #define FAST_PAXOS_DATA_LEN 12
 
 using std::pair;
+using std::string_view;
 
 UDPTransportAddress::UDPTransportAddress(const sockaddr_in &addr)
     : addr(addr)
@@ -391,7 +392,7 @@ UDPTransport::Register(TransportReceiver *receiver,
 
 static size_t SerializeMessage(const ::google::protobuf::Message &m, char **out, const void *my_buf) {
     string data = m.SerializeAsString();
-    string type = m.GetTypeName();
+    string_view type = m.GetTypeName();
     size_t typeLen = type.length();
     size_t dataLen = data.length();
     ssize_t totalLen = (sizeof(uint32_t) +
@@ -408,7 +409,7 @@ static size_t SerializeMessage(const ::google::protobuf::Message &m, char **out,
     ptr += sizeof(size_t);
     ASSERT(ptr-buf < totalLen);
     ASSERT(ptr+typeLen-buf < totalLen);
-    memcpy(ptr, type.c_str(), typeLen);
+    memcpy(ptr, type.data(), typeLen);
     ptr += typeLen;
 
     // asd123www: my data copy.
@@ -459,7 +460,7 @@ UDPTransport::SendMessageInternal(TransportReceiver *src,
         char *bodyStart = buf + sizeof(uint32_t);
         int numFrags = ((msgLen-1) / MAX_UDP_MESSAGE_SIZE) + 1;
         Notice("Sending large %s message in %d fragments",
-               m.GetTypeName().c_str(), numFrags);
+               string(m.GetTypeName()).c_str(), numFrags);
         uint64_t msgId = ++lastFragMsgId;
         for (size_t fragStart = 0; fragStart < msgLen;
              fragStart += MAX_UDP_MESSAGE_SIZE) {

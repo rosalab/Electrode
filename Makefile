@@ -21,7 +21,7 @@ CFLAGS += -I$(LINUX_TOOLS_PATH)/include/uapi
 CFLAGS += -Wno-unused-variable
 
 # CXXFLAGS := -std=c++0x
-override CXXFLAGS += -std=c++14
+override CXXFLAGS += -std=c++17
 LDFLAGS := -levent_pthreads -ldl   -L$(LIBBPF_PATH) -l:libbpf.a -lelf $(USER_LIBS) -lz
 ## Debian package: check
 # CHECK_CFLAGS := $(shell pkg-config --cflags check)
