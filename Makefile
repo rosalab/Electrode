@@ -4,11 +4,11 @@
 
 
 # asd123www: add libbpf flags
-LINUX_PATH ?= ./xdp-handler/linux
-LINUX_TOOLS_PATH = $(LINUX_PATH)/tools
+LINUX_SRC ?= ./xdp-handler/linux
+LINUX_OBJ = $(LINUX_SRC)/../build/linux
+LINUX_TOOLS_PATH = $(LINUX_SRC)/tools
 LINUX_LIB_PATH = $(LINUX_TOOLS_PATH)/lib
 LIBBPF_PATH = $(LINUX_LIB_PATH)/bpf
-LIBBPF = $(LIBBPF_PATH)/libbpf.a
 
 CC = gcc
 CXX = g++
@@ -17,12 +17,12 @@ LD = g++
 CFLAGS := -DNASSERT -O2 -g -Wall -pthread -iquote.obj/gen -Wno-uninitialized
 CFLAGS += -I.
 CFLAGS += -I$(LINUX_LIB_PATH)
-CFLAGS += -I$(LINUX_TOOLS_PATH)/include/uapi
+CFLAGS += -I$(LINUX_OBJ)/usr/include
 CFLAGS += -Wno-unused-variable
 
 # CXXFLAGS := -std=c++0x
 override CXXFLAGS += -std=c++14
-LDFLAGS := -levent_pthreads -ldl   -L$(LIBBPF_PATH) -l:libbpf.a -lelf $(USER_LIBS) -lz
+LDFLAGS := -levent_pthreads -ldl -L$(LINUX_OBJ) -Wl,-rpath=$(LINUX_OBJ) -lbpf -lelf $(USER_LIBS) -lz
 ## Debian package: check
 # CHECK_CFLAGS := $(shell pkg-config --cflags check)
 # CHECK_LDFLAGS := $(shell pkg-config --cflags --libs check)
