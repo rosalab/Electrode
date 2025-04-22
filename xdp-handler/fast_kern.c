@@ -274,8 +274,8 @@ int HandleRequest_main(struct xdp_md *ctx) {
     *(__u32 *)pt = ip->saddr;
     pt += sizeof(__u32);
 
-    for (int i = 0; i < REQ_MAX_DATA_LEN; ++i)
-      if (payload + i + 1 <= data_end) pt[i] = payload[i];
+    for (int i = 0; i < REQ_MAX_DATA_LEN && payload + i + 1 <= data_end; ++i)
+      pt[i] = payload[i];
     bpf_ringbuf_submit(pt - sizeof(__u16) - sizeof(__u32), 0);
   }
   return XDP_DROP;
