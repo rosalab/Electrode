@@ -376,7 +376,7 @@ int main(int argc, char *argv[])
 		assert(system(commandname) == 0);
 		snprintf(commandname, PATH_MAX,
 			 "tc filter add dev %s egress bpf object-pinned "
-			 "/sys/fs/bpf/FastBroadCast",
+			 "/sys/fs/bpf/FastBroadCast_main",
 			 argv[optind + i]);
 		assert(system(commandname) == 0);
 		printf("Main BPF program attached to TC on interface %d\n",
@@ -399,7 +399,7 @@ int main(int argc, char *argv[])
 			 argv[optind + i]);
 		assert(system(commandname) == 0);
 	}
-	assert(system("rm -f /sys/fs/bpf/FastBroadCast") == 0);
+	assert(system("rm -f /sys/fs/bpf/FastBroadCast_main") == 0);
 	printf("\nasd123www: quit safely!\n");
 
 	return 0;
