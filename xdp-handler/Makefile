@@ -30,7 +30,7 @@ USER_SOURCES = ${TARGETS:=_user.c}
 KERN_OBJECTS = ${KERN_SOURCES:.c=.o}
 USER_OBJECTS = ${USER_SOURCES:.c=.o}
 
-override CFLAGS += -g -O3 -Wall -DKBUILD_MODNAME="\"wzz\""
+override CFLAGS += -g -O3 -Wall -DKBUILD_MODNAME="\"wzz\"" -Wno-unused-result
 override CFLAGS += -I$(LINUX_LIB_PATH)
 LDFLAGS ?= -L$(LINUX_OBJ) -Wl,-rpath=$(LINUX_OBJ) -lbpf -lelf -lz
 
