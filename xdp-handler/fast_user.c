@@ -41,19 +41,19 @@ struct bpf_progs_desc {
 };
 // define our eBPF program.
 static struct bpf_progs_desc progs[] = {
-	{ "fastPaxos", BPF_PROG_TYPE_XDP, 0, -1, NULL },
-	{ "HandlePrepare", BPF_PROG_TYPE_XDP, 0, FAST_PROG_XDP_HANDLE_PREPARE,
-	  NULL },
-	{ "HandlePrepareOK", BPF_PROG_TYPE_XDP, 0,
+	{ "fastPaxos_main", BPF_PROG_TYPE_XDP, 0, -1, NULL },
+	{ "HandlePrepare_main", BPF_PROG_TYPE_XDP, 0,
+	  FAST_PROG_XDP_HANDLE_PREPARE, NULL },
+	{ "HandlePrepareOK_main", BPF_PROG_TYPE_XDP, 0,
 	  FAST_PROG_XDP_HANDLE_PREPAREOK, NULL },
-	{ "HandleRequest", BPF_PROG_TYPE_XDP, 0, FAST_PROG_XDP_HANDLE_REQUEST,
+	{ "HandleRequest_main", BPF_PROG_TYPE_XDP, 0,
+	  FAST_PROG_XDP_HANDLE_REQUEST, NULL },
+	{ "WriteBuffer_main", BPF_PROG_TYPE_XDP, 0, FAST_PROG_XDP_WRITE_BUFFER,
 	  NULL },
-	{ "WriteBuffer", BPF_PROG_TYPE_XDP, 0, FAST_PROG_XDP_WRITE_BUFFER,
-	  NULL },
-	{ "PrepareFastReply", BPF_PROG_TYPE_XDP, 0, FAST_PROG_XDP_PREPARE_REPLY,
-	  NULL },
+	{ "PrepareFastReply_main", BPF_PROG_TYPE_XDP, 0,
+	  FAST_PROG_XDP_PREPARE_REPLY, NULL },
 
-	{ "FastBroadCast", BPF_PROG_TYPE_SCHED_CLS, 1, -1, NULL },
+	{ "FastBroadCast_main", BPF_PROG_TYPE_SCHED_CLS, 1, -1, NULL },
 };
 
 struct bpf_object *obj;
