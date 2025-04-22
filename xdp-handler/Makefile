@@ -14,15 +14,15 @@
 #	bmc_kern.c depends on kernel headers and bpf_helpers.h
 #	bmc_user.c depends on libbpf
 
-LINUX_PATH ?= ./linux
-LINUX_TOOLS_PATH = $(LINUX_PATH)/tools
+LINUX_SRC ?= ./linux
+LINUX_OBJ = $(LINUX_SRC)/../build/linux
+LINUX_TOOLS_PATH = $(LINUX_SRC)/tools
 LINUX_LIB_PATH = $(LINUX_TOOLS_PATH)/lib
 LIBBPF_PATH = $(LINUX_LIB_PATH)/bpf
 
 TARGETS += fast
 
 CLANG ?= clang
-LLC ?= llc
 CC := gcc
 
 KERN_SOURCES = ${TARGETS:=_kern.c}
@@ -30,40 +30,21 @@ USER_SOURCES = ${TARGETS:=_user.c}
 KERN_OBJECTS = ${KERN_SOURCES:.c=.o}
 USER_OBJECTS = ${USER_SOURCES:.c=.o}
 
-LIBBPF = $(LIBBPF_PATH)/libbpf.a
-
-# CFLAGS := -g -O3 -Wall -DKBUILD_MODNAME="\"wzz\""
 override CFLAGS += -g -O3 -Wall -DKBUILD_MODNAME="\"wzz\""
-override CFLAGS += -I.
 override CFLAGS += -I$(LINUX_LIB_PATH)
-override CFLAGS += -I$(LINUX_TOOLS_PATH)/include/uapi
-# CFLAGS += -I$(LINUX_TOOLS_PATH)/include
-# CFLAGS += -I$(LINUX_PATH)/include
-# CFLAGS += -fno-pie
-LDFLAGS ?= -L$(LIBBPF_PATH) -l:libbpf.a -lelf $(USER_LIBS) -lz
+LDFLAGS ?= -L$(LINUX_OBJ) -Wl,-rpath=$(LINUX_OBJ) -lbpf -lelf -lz
 
-NOSTDINC_FLAGS := -nostdinc -isystem $(shell $(CC) -print-file-name=include)
-ARCH=$(shell uname -m | sed 's/x86_64/x86/' | sed 's/i386/x86/')
+LINUXINCLUDE := -I$(LINUX_OBJ)/usr/include
 
-LINUXINCLUDE := -I$(LINUX_PATH)/arch/$(ARCH)/include
-LINUXINCLUDE += -I$(LINUX_PATH)/arch/$(ARCH)/include/uapi
-LINUXINCLUDE += -I$(LINUX_PATH)/arch/$(ARCH)/include/generated
-LINUXINCLUDE += -I$(LINUX_PATH)/arch/$(ARCH)/include/generated/uapi
-LINUXINCLUDE += -I$(LINUX_PATH)/include
-LINUXINCLUDE += -I$(LINUX_PATH)/include/uapi
-LINUXINCLUDE += -I$(LINUX_PATH)/include/generated/uapi
-LINUXINCLUDE += -I$(LINUX_PATH)/tools/testing/selftests/bpf
-LINUXINCLUDE += -include $(LINUX_PATH)/include/linux/kconfig.h
-LINUXINCLUDE += -include $(LINUX_PATH)/samples/bpf/asm_goto_workaround.h
-
-# EXTRA_CFLAGS=-Werror
 override EXTRA_CFLAGS += -Werror
+
+BPF_CFLAGS = -fno-stack-protector -O3 -g -target bpf
 
 ###
 
-all: dependencies $(TARGETS) $(KERN_OBJECTS)
+all: $(TARGETS) $(KERN_OBJECTS)
 
-.PHONY: clean dependencies verify_cmds verify_target_bpf $(CLANG) $(LLC)
+.PHONY: clean
 
 clean:
 	@find . -type f \
@@ -77,36 +58,6 @@ clean:
 	rm -f $(USER_OBJECTS)
 	rm -f $(OBJECT_LOADBPF)
 
-dependencies: verify_target_bpf
-
-linux-src:
-	@if ! test -d $(LINUX_PATH)/; then \
-		echo "ERROR: Need kernel source code to compile against" ;\
-		echo "(Cannot open directory: $(LINUX_PATH))" ;\
-		exit 1; \
-else true; fi
-
-linux-src-libbpf: linux-src
-	@if ! test -d $(LIBBPF_PATH); then \
-		echo "WARNING: Compile against local kernel source code copy" ;\
-		echo "       and specifically tools/lib/bpf/ "; \
-else true; fi
-
-verify_cmds: $(CLANG) $(LLC)
-	@for TOOL in $^ ; do \
-		if ! (which -- "$${TOOL}" > /dev/null 2>&1); then \
-			echo "*** ERROR: Cannot find LLVM tool $${TOOL}" ;\
-			exit 1; \
-		else true; fi; \
-	done
-
-verify_target_bpf: verify_cmds
-	@if ! (${LLC} -march=bpf -mattr=help > /dev/null 2>&1); then \
-		echo "*** ERROR: LLVM (${LLC}) does not support 'bpf' target" ;\
-		echo "   NOTICE: LLVM version >= 3.7.1 required" ;\
-		exit 2; \
-	else true; fi
-
 $(LIBBPF): $(wildcard $(LIBBPF_PATH)/*.[ch] $(LIBBPF_PATH)/Makefile)
 	make -C $(LIBBPF_PATH)
 
@@ -119,16 +70,7 @@ $(LIBBPF): $(wildcard $(LIBBPF_PATH)/*.[ch] $(LIBBPF_PATH)/Makefile)
 # unaligned access checks where necessary
 #
 $(KERN_OBJECTS): %.o: %.c
-	$(CLANG) -S $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
-	    -D__KERNEL__ -D__ASM_SYSREG_H -D__BPF_TRACING__  -DKBUILD_MODNAME="\"wzz\"" \
-	    -D__TARGET_ARCH_$(ARCH) -fno-stack-protector \
-	    -Wno-unused-value -Wno-pointer-sign \
-	    -Wno-compare-distinct-pointer-types \
-	    -Wno-gnu-variable-sized-type-not-at-end \
-	    -Wno-tautological-compare \
-	    -Wno-address-of-packed-member \
-	    -O3 -g -emit-llvm -c $< -o ${@:.o=.ll}
-	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
+	$(CLANG) $(BPF_CFLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) -c $< -o $@
 
-$(TARGETS): %: %_user.c $(OBJECTS) $(LIBBPF)
-	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $< $(LIBBPF) $(LDFLAGS)
+$(TARGETS): %: %_user.c $(OBJECTS)
+	$(CC) $(CFLAGS) $(OBJECTS) -o $@ $< $(LDFLAGS)
