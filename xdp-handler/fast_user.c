@@ -19,13 +19,13 @@
 #include <linux/if_link.h>
 #include <linux/limits.h>
 #include <netinet/in.h>
+#include <net/if.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "fast_common.h"
@@ -54,7 +54,6 @@ static struct bpf_progs_desc progs[] = {
 };
 
 struct bpf_object *obj;
-struct bpf_object_load_attr load_attr;
 int err, prog_count;
 int xdp_main_prog_fd;
 char filename[PATH_MAX];
@@ -102,19 +101,16 @@ void create_object() {
   prog_count = sizeof(progs) / sizeof(progs[0]);
   for (int i = 0; i < prog_count; i++) {
     printf("progname: %s\n", progs[i].name);
-    progs[i].prog = bpf_object__find_program_by_title(obj, progs[i].name);
+    progs[i].prog = bpf_object__find_program_by_name(obj, progs[i].name);
     if (!progs[i].prog) {
-      fprintf(stderr, "Error: bpf_object__find_program_by_title failed\n");
+      fprintf(stderr, "Error: bpf_object__find_program_by_name failed\n");
       exit(1);  // return 1;
     }
     bpf_program__set_type(progs[i].prog, progs[i].type);
   }
 
-  load_attr.obj = obj;
-  load_attr.log_level = LIBBPF_WARN;
-
   /* Load/unload object into/from kernel */
-  err = bpf_object__load_xattr(&load_attr);
+  err = bpf_object__load(obj);
   if (err) {
     fprintf(stderr, "Error: bpf_object__load_xattr failed\n");
     exit(1);  // return 1;
@@ -204,7 +200,7 @@ void initial_prog_map() {
         exit(-1);  // return -1;
       }
     retry:
-      if (bpf_program__pin_instance(progs[i].prog, filename, 0)) {
+      if (bpf_program__pin(progs[i].prog, filename)) {
         fprintf(stderr, "Error: Failed to pin program '%s' to path %s\n",
                 progs[i].name, filename);
         if (errno == EEXIST) {
@@ -212,7 +208,7 @@ void initial_prog_map() {
               stdout,
               "BPF program '%s' already pinned, unpinning it to reload it\n",
               progs[i].name);
-          if (bpf_program__unpin_instance(progs[i].prog, filename, 0)) {
+          if (bpf_program__unpin(progs[i].prog, filename)) {
             fprintf(stderr, "Error: Fail to unpin program '%s' at %s\n",
                     progs[i].name, filename);
             exit(-1);
@@ -244,7 +240,7 @@ void add_interrupt() {
   sigaddset(&signal_mask, SIGTERM);
   sigaddset(&signal_mask, SIGUSR1);
 
-  int sig, cur_poll_count = 0, quit = 0;
+  int sig, quit = 0;
   // FILE *fp = NULL;
 
   err = sigprocmask(SIG_BLOCK, &signal_mask, NULL);
@@ -283,7 +279,7 @@ void read_config() {
 
   FILE *fp;
   char buff[255];
-  int f = 0, port = 0;
+  int f = 0;
 
   struct sockaddr_in sa;
   char str[INET_ADDRSTRLEN];
@@ -309,7 +305,7 @@ void read_config() {
     inet_ntop(AF_INET, &(sa.sin_addr), str, INET_ADDRSTRLEN);
     conf.port = htons(atoi(port));
     conf.addr = sa.sin_addr.s_addr;
-    sscanf(eths[i], "%x:%x:%x:%x:%x:%x", conf.eth, conf.eth + 1, conf.eth + 2,
+    sscanf(eths[i], "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", conf.eth, conf.eth + 1, conf.eth + 2,
            conf.eth + 3, conf.eth + 4, conf.eth + 5);
     err = bpf_map_update_elem(map_configure_fd, &i, &conf, 0);
   }
@@ -332,7 +328,7 @@ int main(int argc, char *argv[]) {
          0);
 
   for (int i = 0; i < interface_count; i++) {
-    if (bpf_set_link_xdp_fd(interfaces_idx[i], xdp_main_prog_fd, xdp_flags) <
+    if (bpf_xdp_attach(interfaces_idx[i], xdp_main_prog_fd, xdp_flags, NULL) <
         0) {
       fprintf(stderr, "Error: bpf_set_link_xdp_fd failed for interface %d\n",
               interfaces_idx[i]);
@@ -362,7 +358,7 @@ int main(int argc, char *argv[]) {
   assert(remove("/sys/fs/bpf/paxos_ctr_state") == 0);
 
   for (int i = 0; i < interface_count; i++) {
-    bpf_set_link_xdp_fd(interfaces_idx[i], -1, xdp_flags);
+    bpf_xdp_attach(interfaces_idx[i], -1, xdp_flags, NULL);
   }
   for (int i = 0; i < interface_count && optind < argc; i++) {
     snprintf(commandname, PATH_MAX, "tc filter del dev %s egress",
