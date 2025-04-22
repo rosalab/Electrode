@@ -11,12 +11,16 @@
 
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
+#include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/pkt_cls.h>
 #include <linux/tcp.h>
+#include <linux/types.h>
 #include <linux/udp.h>
 
+#include <bpf/bpf_endian.h>
+#include <bpf/bpf_helpers.h>
 #include "fast_common.h"
-#include "linux/tools/lib/bpf/bpf_helpers.h"
 
 #define ADJUST_HEAD_LEN 128
 #define MTU 1500
@@ -30,25 +34,26 @@
  */
 
 /* program maps */
-struct bpf_map_def SEC("maps") map_progs_xdp = {
-    .type = BPF_MAP_TYPE_PROG_ARRAY,
-    .key_size = sizeof(__u32),
-    .value_size = sizeof(__u32),
-    .max_entries = FAST_PROG_XDP_MAX,
-};
-struct bpf_map_def SEC("maps") map_progs_tc = {
-    .type = BPF_MAP_TYPE_PROG_ARRAY,
-    .key_size = sizeof(__u32),
-    .value_size = sizeof(__u32),
-    .max_entries = FAST_PROG_TC_MAX,
-};
+struct {
+    __uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+    __uint(key_size, sizeof(__u32));
+	  __uint(value_size, sizeof(__u32));
+    __uint(max_entries, FAST_PROG_XDP_MAX);
+} map_progs_xdp SEC(".maps");
 
-struct bpf_map_def SEC("maps") map_configure = {
-    .type = BPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(__u32),
-    .value_size = sizeof(struct paxos_configure),
-    .max_entries = FAST_REPLICA_MAX,
-};
+struct {
+    __uint(type, BPF_MAP_TYPE_PROG_ARRAY);
+    __uint(key_size, sizeof(__u32));
+	  __uint(value_size, sizeof(__u32));
+    __uint(max_entries, FAST_PROG_TC_MAX);
+} map_progs_tc SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(key_size, sizeof(__u32));
+    __uint(value_size, sizeof(struct paxos_configure));
+    __uint(max_entries, FAST_REPLICA_MAX);
+} map_configure SEC(".maps");
 
 // control state, only changes in user-space(except lastOp).
 struct paxos_ctr_state {
@@ -56,18 +61,21 @@ struct paxos_ctr_state {
   int myIdx, leaderIdx, batchSize;  // it's easier to maintain in user-space.
   __u64 view, lastOp;
 };
-struct bpf_map_def SEC("maps") map_ctr_state = {
-    .type = BPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(__u32),
-    .value_size = sizeof(struct paxos_ctr_state),
-    .max_entries = 1,
-};
-struct bpf_map_def SEC("maps") map_msg_lastOp = {
-    .type = BPF_MAP_TYPE_ARRAY,
-    .key_size = sizeof(__u32),
-    .value_size = sizeof(__u64),
-    .max_entries = 1,
-};
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(key_size, sizeof(__u32));
+    __uint(value_size, sizeof(struct paxos_ctr_state));
+    __uint(max_entries, 1);
+
+} map_ctr_state SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(key_size, sizeof(__u32));
+    __uint(value_size, sizeof(__u64));
+    __uint(max_entries, 1);
+} map_msg_lastOp SEC(".maps");
 
 struct paxos_quorum {
   __u32 view, opnum, bitset;
@@ -85,19 +93,20 @@ struct paxos_batch {
 };
 struct {
   __uint(type, BPF_MAP_TYPE_ARRAY);
-  __type(key, u32);
+  __type(key, __u32);
   __type(value, struct paxos_batch);
   __uint(max_entries, 1);
 } batch_context SEC(".maps");
 
-struct bpf_map_def SEC("maps") map_prepare_buffer = {
-    .type = BPF_MAP_TYPE_RINGBUF,
-    .max_entries = 1 << 20,
-};
-struct bpf_map_def SEC("maps") map_request_buffer = {
-    .type = BPF_MAP_TYPE_RINGBUF,
-    .max_entries = 1 << 20,
-};
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 20);
+} map_prepare_buffer SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_RINGBUF);
+    __uint(max_entries, 1 << 20);
+} map_request_buffer SEC(".maps");
 
 static inline __u16 compute_ip_checksum(struct iphdr *ip) {
   __u32 csum = 0;
@@ -153,7 +162,7 @@ int fastPaxos_main(struct xdp_md *ctx) {
   if (ip + 1 > data_end) return XDP_PASS;            // boundary check.
   if (ip->protocol != IPPROTO_UDP) return XDP_PASS;  // check it's udp packet.
   if (udp + 1 > data_end) return XDP_PASS;           // boundary check.
-  if (udp->dest != htons(12345))
+  if (udp->dest != bpf_htons(12345))
     return XDP_PASS;  // port check, our process bound to 12345.
   if (payload + MAGIC_LEN > data_end)
     return XDP_PASS;  // don't have magic bits...
@@ -429,18 +438,18 @@ int PrepareFastReply_main(struct xdp_md *ctx) {
 
   udp->source = udp->dest;
   udp->dest = leaderInfo->port;
-  udp->len = htons(payload - (char *)udp);  // calc length.
+  udp->len = bpf_htons(payload - (char *)udp);  // calc length.
   udp->check = 0;  // computing udp checksum is not required
 
-  ip->tot_len = htons(payload - (char *)udp + sizeof(struct iphdr));
+  ip->tot_len = bpf_htons(payload - (char *)udp + sizeof(struct iphdr));
   ip->saddr = ip->daddr;
   ip->daddr = leaderInfo->addr;
   ip->check = compute_ip_checksum(ip);
 
   unsigned char tmp_mac[ETH_ALEN];
-  memcpy(tmp_mac, eth->h_source, ETH_ALEN);
-  memcpy(eth->h_source, eth->h_dest, ETH_ALEN);
-  memcpy(eth->h_dest, tmp_mac, ETH_ALEN);
+  __builtin_memcpy(tmp_mac, eth->h_source, ETH_ALEN);
+  __builtin_memcpy(eth->h_source, eth->h_dest, ETH_ALEN);
+  __builtin_memcpy(eth->h_dest, tmp_mac, ETH_ALEN);
 
   bpf_xdp_adjust_tail(ctx, (void *)payload - data_end);
   return XDP_TX;
@@ -459,7 +468,7 @@ int FastBroadCast_main(struct __sk_buff *skb) {
   if (ip + 1 > data_end) return TC_ACT_OK;
   if (ip->protocol != IPPROTO_UDP) return TC_ACT_OK;
   if (udp + 1 > data_end) return TC_ACT_OK;
-  if (udp->source != htons(12345)) return TC_ACT_OK;  // not Paxos packet.
+  if (udp->source != bpf_htons(12345)) return TC_ACT_OK;  // not Paxos packet.
 
   if (payload + MAGIC_LEN > data_end)
     return TC_ACT_OK;  // don't have magic bits...
@@ -549,7 +558,7 @@ int FastBroadCast_main(struct __sk_buff *skb) {
   udp->check = 0;
   ip->daddr = replicaInfo->addr;
   ip->check = compute_ip_checksum(ip);
-  memcpy(eth->h_dest, replicaInfo->eth, ETH_ALEN);
+  __builtin_memcpy(eth->h_dest, replicaInfo->eth, ETH_ALEN);
 
   return TC_ACT_OK;
 }
