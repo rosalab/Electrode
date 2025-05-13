@@ -38,7 +38,7 @@ LINUXINCLUDE := -I$(LINUX_OBJ)/usr/include
 
 override EXTRA_CFLAGS += -Werror
 
-BPF_CFLAGS = -fno-stack-protector -O3 -g -target bpf -Wno-compare-distinct-pointer-types
+BPF_CFLAGS = -fno-stack-protector -O3 -g -target bpf -Wno-compare-distinct-pointer-types -I$(LINUX_LIB_PATH) -I$(LINUX_OBJ)
 
 ###
 
